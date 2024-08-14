@@ -34,10 +34,10 @@ defmodule Mighty.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nimble_options, "~> 1.0"},
-      {:nx, "~> 0.6"},
-      {:ex_doc, "~> 0.29.0", only: :docs},
-      {:scholar, "~> 0.2"},
+      {:nimble_options, "~> 1.1"},
+      {:nx, "~> 0.7"},
+      {:ex_doc, "~> 0.34.2", only: :docs},
+      {:scholar, "~> 0.3"},
       {:exterval, "~> 0.2"},
       {:flow, "~> 1.2"}
     ]
