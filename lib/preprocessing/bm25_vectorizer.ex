@@ -6,10 +6,26 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
   alias Mighty.Preprocessing.CountVectorizer
   alias Mighty.Preprocessing.Shared
 
-  defstruct [:count_vectorizer, :idf, :avg_doc_length, :doc_lengths, k1: 1.2, b: 0.75]
+  defstruct [
+    :count_vectorizer,
+    :idf,
+    :avg_doc_length,
+    :doc_lengths,
+    term_saturation_factor: 1.2,
+    length_normalization_factor: 0.75
+  ]
 
   @doc """
   Creates a new `BM25Vectorizer` struct with the given options.
+
+  ## Options
+
+    * `:term_saturation_factor` - Controls non-linear term frequency normalization (saturation).
+      Higher values give more weight to term frequency. Default is `1.2`.
+    * `:length_normalization_factor` - Controls document length normalization.
+      Values closer to 1 give more value to document length. Default is `0.75`.
+
+  _Also supports options found in `CountVectorizer`._
 
   Returns the new vectorizer.
   """
@@ -64,8 +80,8 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
       vectorizer.idf,
       doc_lengths,
       vectorizer.avg_doc_length,
-      vectorizer.k1,
-      vectorizer.b
+      vectorizer.term_saturation_factor,
+      vectorizer.length_normalization_factor
     )
   end
 
@@ -83,8 +99,8 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
        vectorizer.idf,
        vectorizer.doc_lengths,
        vectorizer.avg_doc_length,
-       vectorizer.k1,
-       vectorizer.b
+       vectorizer.term_saturation_factor,
+       vectorizer.length_normalization_factor
      )}
   end
 
@@ -93,12 +109,27 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     Nx.log1p(Nx.divide(Nx.subtract(n_docs_tensor, df), Nx.add(df, 1)))
   end
 
-  defp calculate_bm25_score(tf, idf, doc_lengths, avg_doc_length, k1, b) do
+  defp calculate_bm25_score(
+         tf,
+         idf,
+         doc_lengths,
+         avg_doc_length,
+         term_saturation_factor,
+         length_normalization_factor
+       ) do
     doc_lengths = Nx.new_axis(doc_lengths, 1)
     len_norm = Nx.divide(doc_lengths, avg_doc_length)
 
-    numerator = Nx.multiply(Nx.multiply(idf, tf), k1 + 1)
-    denominator = Nx.add(tf, Nx.multiply(k1, Nx.add(1, Nx.multiply(b, Nx.subtract(len_norm, 1)))))
+    numerator = Nx.multiply(Nx.multiply(idf, tf), term_saturation_factor + 1)
+
+    denominator =
+      Nx.add(
+        tf,
+        Nx.multiply(
+          term_saturation_factor,
+          Nx.add(1, Nx.multiply(length_normalization_factor, Nx.subtract(len_norm, 1)))
+        )
+      )
 
     Nx.sum(Nx.divide(numerator, denominator), axes: [1])
   end

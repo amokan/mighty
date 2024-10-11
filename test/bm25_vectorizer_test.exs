@@ -7,7 +7,7 @@ defmodule BM25VectorizerTest do
     %{
       corpus: [
         "This is the first document",
-        "The fast fox and the pig danced in the moonlight",
+        "The brown fox and the purple pig danced in the moonlight",
         "This document is kinda cool",
         "And this is another document",
         "A fox and hound quickly walked into a bar",
@@ -19,8 +19,11 @@ defmodule BM25VectorizerTest do
   end
 
   test "creates a new BM25Vectorizer", _ do
-    vectorizer = BM25Vectorizer.new(k1: 1.5, b: 0.75)
-    assert %BM25Vectorizer{k1: 1.5, b: 0.75} = vectorizer
+    vectorizer =
+      BM25Vectorizer.new(term_saturation_factor: 1.5, length_normalization_factor: 0.75)
+
+    assert %BM25Vectorizer{term_saturation_factor: 1.5, length_normalization_factor: 0.75} =
+             vectorizer
   end
 
   test "fits BM25Vectorizer to corpus", %{corpus: corpus} do
@@ -45,7 +48,9 @@ defmodule BM25VectorizerTest do
   end
 
   test "ranks documents based on query", %{corpus: corpus, query: query} do
-    vectorizer = BM25Vectorizer.new(k1: 1.5, b: 0.75)
+    vectorizer =
+      BM25Vectorizer.new(term_saturation_factor: 1.5, length_normalization_factor: 0.75)
+
     {fitted_vectorizer, _} = BM25Vectorizer.fit_transform(vectorizer, corpus)
 
     corpus_scores = BM25Vectorizer.transform(fitted_vectorizer, corpus)
@@ -56,13 +61,20 @@ defmodule BM25VectorizerTest do
     highest_ranked_index = ranked_indices |> Nx.to_flat_list() |> List.first()
     highest_ranked = Enum.at(corpus, highest_ranked_index)
 
-    assert highest_ranked == "The fast fox and the pig danced in the moonlight"
+    assert highest_ranked == "The brown fox and the purple pig danced in the moonlight"
   end
 
   test "ranks documents based on query with stopwords", %{corpus: corpus, query: query} do
-    stopwords = ~w(a an and the is in of to for with)
+    # note the seemingly odd inclusion of "purple" for the sake of this test
+    stopwords = ~w(a an and the is in of purple to for with)
 
-    vectorizer = BM25Vectorizer.new(k1: 1.5, b: 0.75, stop_words: stopwords)
+    vectorizer =
+      BM25Vectorizer.new(
+        term_saturation_factor: 1.5,
+        length_normalization_factor: 0.75,
+        stop_words: stopwords
+      )
+
     {fitted_vectorizer, _} = BM25Vectorizer.fit_transform(vectorizer, corpus)
 
     corpus_scores = BM25Vectorizer.transform(fitted_vectorizer, corpus)
@@ -70,9 +82,18 @@ defmodule BM25VectorizerTest do
 
     similarity = Nx.multiply(corpus_scores, Nx.broadcast(query_score, Nx.shape(corpus_scores)))
     ranked_indices = Nx.argsort(similarity, direction: :desc)
-    highest_ranked_index = ranked_indices |> Nx.to_flat_list() |> List.first()
-    highest_ranked = Enum.at(corpus, highest_ranked_index)
+    ranked_scores = Nx.take(similarity, ranked_indices)
 
-    assert highest_ranked == "A fox and hound quickly walked into a bar"
+    ranked_results =
+      ranked_indices
+      |> Nx.to_flat_list()
+      |> Enum.zip(Nx.to_flat_list(ranked_scores))
+      |> Enum.with_index(1)
+      |> Enum.map(fn {{index, score}, rank} ->
+        {Enum.at(corpus, index), score, rank}
+      end)
+
+    assert {"A fox and hound quickly walked into a bar", _score, 1} = Enum.at(ranked_results, 0)
+    assert {"Is this a document", _score, 7} = List.last(ranked_results)
   end
 end

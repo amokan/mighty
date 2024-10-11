@@ -133,12 +133,12 @@ defmodule Mighty.Preprocessing.Shared do
   ]
 
   bm25_schema_opts = [
-    k1: [
+    term_saturation_factor: [
       type: :float,
       default: 1.2,
       doc: "Controls non-linear term frequency normalization (saturation) in BM25."
     ],
-    b: [
+    length_normalization_factor: [
       type: {:custom, __MODULE__, :validate_float_0_to_1, []},
       default: 0.75,
       doc: "Controls to what degree document length normalizes term frequency values in BM25."
