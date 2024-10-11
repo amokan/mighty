@@ -11,10 +11,8 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     :idf,
     :avg_doc_length,
     :doc_lengths,
-    :max_score,
     term_saturation_factor: 1.2,
-    length_normalization_factor: 0.75,
-    normalize: false
+    length_normalization_factor: 0.75
   ]
 
   @doc """
@@ -28,7 +26,6 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
       Higher values give more weight to term frequency. Default is `1.2`.
     * `:length_normalization_factor` (_often seen as 'b'_) - Controls document length normalization.
       Values closer to 1 give more value to document length. Default is `0.75`.
-    * `:normalize` - Set to `true` to normalize the final BM25 scores to a range of 0..1. Default is `false`.
 
   _Also supports options found in `CountVectorizer`._
   """
@@ -50,7 +47,7 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
   Returns the fitted vectorizer.
   """
   def fit(
-        %__MODULE__{count_vectorizer: count_vectorizer, normalize: normalize} = vectorizer,
+        %__MODULE__{count_vectorizer: count_vectorizer} = vectorizer,
         corpus
       ) do
     {cv, tf} = CountVectorizer.fit_transform(count_vectorizer, corpus)
@@ -62,24 +59,11 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     doc_lengths = Nx.sum(tf, axes: [1])
     avg_doc_length = Nx.mean(doc_lengths)
 
-    scores =
-      calculate_bm25_score(
-        tf,
-        idf,
-        doc_lengths,
-        avg_doc_length,
-        vectorizer.term_saturation_factor,
-        vectorizer.length_normalization_factor
-      )
-
-    max_score = if normalize, do: Nx.reduce_max(scores), else: nil
-
     struct(vectorizer,
       count_vectorizer: cv,
       idf: idf,
       avg_doc_length: avg_doc_length,
-      doc_lengths: doc_lengths,
-      max_score: max_score
+      doc_lengths: doc_lengths
     )
   end
 
@@ -90,32 +74,18 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
 
   Returns the BM25 matrix of the corpus given a prior fitting.
   """
-  def transform(
-        %__MODULE__{
-          count_vectorizer: count_vectorizer,
-          normalize: normalize,
-          max_score: max_score
-        } = vectorizer,
-        corpus
-      ) do
+  def transform(%__MODULE__{count_vectorizer: count_vectorizer} = vectorizer, corpus) do
     tf = CountVectorizer.transform(count_vectorizer, corpus)
     doc_lengths = Nx.sum(tf, axes: [1])
 
-    scores =
-      calculate_bm25_score(
-        tf,
-        vectorizer.idf,
-        doc_lengths,
-        vectorizer.avg_doc_length,
-        vectorizer.term_saturation_factor,
-        vectorizer.length_normalization_factor
-      )
-
-    if normalize && max_score do
-      Nx.divide(scores, max_score)
-    else
-      scores
-    end
+    calculate_bm25_score(
+      tf,
+      vectorizer.idf,
+      doc_lengths,
+      vectorizer.avg_doc_length,
+      vectorizer.term_saturation_factor,
+      vectorizer.length_normalization_factor
+    )
   end
 
   @doc """
