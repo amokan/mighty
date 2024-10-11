@@ -39,12 +39,12 @@ defmodule Mighty.Utils do
   ## Examples
   ```elixir
   iex> alias Mighty.Utils, as: U
-  iex> U.pad_sequence([1,2,3,4,5], 2, pad_left: true, pad_right: true, left_pad_symbol: '<s>', right_pad_symbol: '</s>')
-  ['<s>', 1, 2, 3, 4, 5, '</s>']
-  iex> U.pad_sequence([1,2,3,4,5], 2, pad_left: true, left_pad_symbol: '<s>')
-  ['<s>', 1, 2, 3, 4, 5]
-  iex> U.pad_sequence([1,2,3,4,5], 2, pad_right: true, right_pad_symbol: '</s>')
-  [1, 2, 3, 4, 5, '</s>']
+  iex> U.pad_sequence([1,2,3,4,5], 2, pad_left: true, pad_right: true, left_pad_symbol: ~c"<s>", right_pad_symbol: ~c"</s>")
+  [~c"<s>", 1, 2, 3, 4, 5, ~c"</s>"]
+  iex> U.pad_sequence([1,2,3,4,5], 2, pad_left: true, left_pad_symbol: ~c"<s>")
+  [~c"<s>", 1, 2, 3, 4, 5]
+  iex> U.pad_sequence([1,2,3,4,5], 2, pad_right: true, right_pad_symbol: ~c"</s>")
+  [1, 2, 3, 4, 5, ~c"</s>"]
   ```
   """
   def pad_sequence(

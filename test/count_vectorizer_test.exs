@@ -22,12 +22,12 @@ defmodule CountVectorizerTest do
 
     vocab_keys = vectorizer.vocabulary |> Map.keys() |> MapSet.new()
     tf = CountVectorizer.transform(vectorizer, context[:corpus])
-    expected_x = ~M<
+    expected_x = ~MAT<
     0 1 1 1 0 0 1 0 1
     0 2 0 1 0 1 1 0 1
     1 0 0 1 1 0 1 1 1
     0 1 1 1 0 0 1 0 1
-    >
+    >s64
 
     assert tf == expected_x
 
@@ -55,12 +55,13 @@ defmodule CountVectorizerTest do
       |> CountVectorizer.fit(context[:corpus])
 
     tf = CountVectorizer.transform(vectorizer, context[:corpus])
-    expected_x = ~M<
+    expected_x = ~MAT<
     0 0 1 1 0 0 1 0 0 0 0 1 0
     0 1 0 1 0 1 0 1 0 0 1 0 0
     1 0 0 1 0 0 0 0 1 1 0 1 0
     0 0 1 0 1 0 1 0 0 0 0 0 1
-    >
+    >s64
+
     assert tf == expected_x
 
     expected_vocab =
