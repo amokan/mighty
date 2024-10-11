@@ -105,8 +105,14 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
   end
 
   defp calculate_idf(df, n_docs) do
-    n_docs_tensor = Nx.broadcast(Nx.tensor(n_docs, type: Nx.type(df)), Nx.shape(df))
-    Nx.log1p(Nx.divide(Nx.subtract(n_docs_tensor, df), Nx.add(df, 1)))
+    n_docs_tensor = Nx.tensor(n_docs, type: Nx.type(df))
+
+    df
+    |> Nx.shape()
+    |> then(&Nx.broadcast(n_docs_tensor, &1))
+    |> Nx.subtract(df)
+    |> Nx.divide(Nx.add(df, 1))
+    |> Nx.log1p()
   end
 
   defp calculate_bm25_score(

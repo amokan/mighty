@@ -93,7 +93,10 @@ defmodule BM25VectorizerTest do
         {Enum.at(corpus, index), score, rank}
       end)
 
-    assert {"A fox and hound quickly walked into a bar", _score, 1} = Enum.at(ranked_results, 0)
+    assert {"A fox and hound quickly walked into a bar", highest_ranked_score, 1} =
+             Enum.at(ranked_results, 0)
+
+    assert highest_ranked_score >= 29.0
     assert {"Is this a document", _score, 7} = List.last(ranked_results)
   end
 end
