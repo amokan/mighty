@@ -1,6 +1,6 @@
 defmodule Mighty.Preprocessing.BM25Vectorizer do
   @moduledoc """
-  Best Match 25 (BM25) Vectorizer for `Mighty`.
+  Okapi BM25 (Best Match 25) Vectorizer for `Mighty`.
   """
 
   alias Mighty.Preprocessing.CountVectorizer
@@ -12,22 +12,24 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     :avg_doc_length,
     :doc_lengths,
     term_saturation_factor: 1.2,
-    length_normalization_factor: 0.75
+    length_normalization_factor: 0.75,
+    normalize: false
   ]
 
   @doc """
   Creates a new `BM25Vectorizer` struct with the given options.
 
+  Returns the new vectorizer.
+
   ## Options
 
-    * `:term_saturation_factor` - Controls non-linear term frequency normalization (saturation).
+    * `:term_saturation_factor` (_often seen as 'k1'_) - Controls non-linear term frequency normalization (saturation).
       Higher values give more weight to term frequency. Default is `1.2`.
-    * `:length_normalization_factor` - Controls document length normalization.
+    * `:length_normalization_factor` (_often seen as 'b'_) - Controls document length normalization.
       Values closer to 1 give more value to document length. Default is `0.75`.
+    * `:normalize` - Set to `true` to normalize the final BM25 scores to a range of 0..1. Default is `false`.
 
   _Also supports options found in `CountVectorizer`._
-
-  Returns the new vectorizer.
   """
   def new(opts \\ []) do
     {general_opts, bm25_opts} =
@@ -71,8 +73,8 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
 
   Returns the BM25 matrix of the corpus given a prior fitting.
   """
-  def transform(%__MODULE__{count_vectorizer: count_vectorizer} = vectorizer, corpus) do
-    tf = CountVectorizer.transform(count_vectorizer, corpus)
+  def transform(%__MODULE__{} = vectorizer, corpus) do
+    tf = CountVectorizer.transform(vectorizer.count_vectorizer, corpus)
     doc_lengths = Nx.sum(tf, axes: [1])
 
     calculate_bm25_score(
@@ -81,7 +83,8 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
       doc_lengths,
       vectorizer.avg_doc_length,
       vectorizer.term_saturation_factor,
-      vectorizer.length_normalization_factor
+      vectorizer.length_normalization_factor,
+      vectorizer.normalize
     )
   end
 
@@ -100,7 +103,8 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
        vectorizer.doc_lengths,
        vectorizer.avg_doc_length,
        vectorizer.term_saturation_factor,
-       vectorizer.length_normalization_factor
+       vectorizer.length_normalization_factor,
+       vectorizer.normalize
      )}
   end
 
@@ -111,8 +115,9 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     |> Nx.shape()
     |> then(&Nx.broadcast(n_docs_tensor, &1))
     |> Nx.subtract(df)
-    |> Nx.divide(Nx.add(df, 1))
-    |> Nx.log1p()
+    |> Nx.add(0.5)
+    |> Nx.divide(Nx.add(df, 0.5))
+    |> Nx.log()
   end
 
   defp calculate_bm25_score(
@@ -121,22 +126,42 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
          doc_lengths,
          avg_doc_length,
          term_saturation_factor,
-         length_normalization_factor
+         length_normalization_factor,
+         normalize
        ) do
-    doc_lengths = Nx.new_axis(doc_lengths, 1)
-    len_norm = Nx.divide(doc_lengths, avg_doc_length)
+    # doc length normalization
+    len_norm =
+      doc_lengths
+      |> Nx.new_axis(1)
+      |> Nx.divide(avg_doc_length)
 
-    numerator = Nx.multiply(Nx.multiply(idf, tf), term_saturation_factor + 1)
+    # numerator: (k1 + 1) * tf * idf
+    numerator =
+      tf
+      |> Nx.multiply(idf)
+      |> Nx.multiply(term_saturation_factor + 1)
 
+    # denominator: k1 * (1 - b + b * len_norm) + tf
     denominator =
-      Nx.add(
-        tf,
-        Nx.multiply(
-          term_saturation_factor,
-          Nx.add(1, Nx.multiply(length_normalization_factor, Nx.subtract(len_norm, 1)))
-        )
-      )
+      len_norm
+      |> Nx.subtract(1)
+      |> Nx.multiply(length_normalization_factor)
+      |> Nx.add(1)
+      |> Nx.multiply(term_saturation_factor)
+      |> Nx.add(tf)
 
-    Nx.sum(Nx.divide(numerator, denominator), axes: [1])
+    scores =
+      numerator
+      |> Nx.divide(denominator)
+      |> Nx.sum(axes: [1])
+
+    non_negative_scores = Nx.max(scores, 1.0e-10)
+
+    if normalize do
+      max_score = Nx.reduce_max(non_negative_scores)
+      Nx.divide(non_negative_scores, max_score)
+    else
+      non_negative_scores
+    end
   end
 end

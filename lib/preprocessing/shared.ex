@@ -142,6 +142,11 @@ defmodule Mighty.Preprocessing.Shared do
       type: {:custom, __MODULE__, :validate_float_0_to_1, []},
       default: 0.75,
       doc: "Controls to what degree document length normalizes term frequency values in BM25."
+    ],
+    normalize: [
+      type: :boolean,
+      default: false,
+      doc: "Whether to normalize the final BM25 scores to a range of `0..1`."
     ]
   ]
 
