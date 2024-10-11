@@ -11,6 +11,7 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     :idf,
     :avg_doc_length,
     :doc_lengths,
+    :max_score,
     term_saturation_factor: 1.2,
     length_normalization_factor: 0.75,
     normalize: false
@@ -48,7 +49,10 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
 
   Returns the fitted vectorizer.
   """
-  def fit(%__MODULE__{count_vectorizer: count_vectorizer} = vectorizer, corpus) do
+  def fit(
+        %__MODULE__{count_vectorizer: count_vectorizer, normalize: normalize} = vectorizer,
+        corpus
+      ) do
     {cv, tf} = CountVectorizer.fit_transform(count_vectorizer, corpus)
     df = Scholar.Preprocessing.binarize(tf) |> Nx.sum(axes: [0])
 
@@ -58,11 +62,24 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     doc_lengths = Nx.sum(tf, axes: [1])
     avg_doc_length = Nx.mean(doc_lengths)
 
+    scores =
+      calculate_bm25_score(
+        tf,
+        idf,
+        doc_lengths,
+        avg_doc_length,
+        vectorizer.term_saturation_factor,
+        vectorizer.length_normalization_factor
+      )
+
+    max_score = if normalize, do: Nx.reduce_max(scores), else: nil
+
     struct(vectorizer,
       count_vectorizer: cv,
       idf: idf,
       avg_doc_length: avg_doc_length,
-      doc_lengths: doc_lengths
+      doc_lengths: doc_lengths,
+      max_score: max_score
     )
   end
 
@@ -73,19 +90,32 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
 
   Returns the BM25 matrix of the corpus given a prior fitting.
   """
-  def transform(%__MODULE__{} = vectorizer, corpus) do
-    tf = CountVectorizer.transform(vectorizer.count_vectorizer, corpus)
+  def transform(
+        %__MODULE__{
+          count_vectorizer: count_vectorizer,
+          normalize: normalize,
+          max_score: max_score
+        } = vectorizer,
+        corpus
+      ) do
+    tf = CountVectorizer.transform(count_vectorizer, corpus)
     doc_lengths = Nx.sum(tf, axes: [1])
 
-    calculate_bm25_score(
-      tf,
-      vectorizer.idf,
-      doc_lengths,
-      vectorizer.avg_doc_length,
-      vectorizer.term_saturation_factor,
-      vectorizer.length_normalization_factor,
-      vectorizer.normalize
-    )
+    scores =
+      calculate_bm25_score(
+        tf,
+        vectorizer.idf,
+        doc_lengths,
+        vectorizer.avg_doc_length,
+        vectorizer.term_saturation_factor,
+        vectorizer.length_normalization_factor
+      )
+
+    if normalize && max_score do
+      Nx.divide(scores, max_score)
+    else
+      scores
+    end
   end
 
   @doc """
@@ -94,18 +124,8 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
   Returns a tuple with the fitted vectorizer and the transformed corpus.
   """
   def fit_transform(%__MODULE__{} = vectorizer, corpus) do
-    vectorizer = fit(vectorizer, corpus)
-
-    {vectorizer,
-     calculate_bm25_score(
-       CountVectorizer.transform(vectorizer.count_vectorizer, corpus),
-       vectorizer.idf,
-       vectorizer.doc_lengths,
-       vectorizer.avg_doc_length,
-       vectorizer.term_saturation_factor,
-       vectorizer.length_normalization_factor,
-       vectorizer.normalize
-     )}
+    fitted_vectorizer = fit(vectorizer, corpus)
+    {fitted_vectorizer, transform(fitted_vectorizer, corpus)}
   end
 
   defp calculate_idf(df, n_docs) do
@@ -126,8 +146,7 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
          doc_lengths,
          avg_doc_length,
          term_saturation_factor,
-         length_normalization_factor,
-         normalize
+         length_normalization_factor
        ) do
     # doc length normalization
     len_norm =
@@ -150,18 +169,9 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
       |> Nx.multiply(term_saturation_factor)
       |> Nx.add(tf)
 
-    scores =
-      numerator
-      |> Nx.divide(denominator)
-      |> Nx.sum(axes: [1])
-
-    non_negative_scores = Nx.max(scores, 1.0e-10)
-
-    if normalize do
-      max_score = Nx.reduce_max(non_negative_scores)
-      Nx.divide(non_negative_scores, max_score)
-    else
-      non_negative_scores
-    end
+    numerator
+    |> Nx.divide(denominator)
+    |> Nx.sum(axes: [1])
+    |> Nx.max(1.0e-10)
   end
 end
