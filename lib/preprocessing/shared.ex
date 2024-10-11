@@ -132,8 +132,22 @@ defmodule Mighty.Preprocessing.Shared do
     ]
   ]
 
+  bm25_schema_opts = [
+    k1: [
+      type: :float,
+      default: 1.2,
+      doc: "Controls non-linear term frequency normalization (saturation) in BM25."
+    ],
+    b: [
+      type: {:custom, __MODULE__, :validate_float_0_to_1, []},
+      default: 0.75,
+      doc: "Controls to what degree document length normalizes term frequency values in BM25."
+    ]
+  ]
+
   @vectorizer_schema NimbleOptions.new!(vectorizer_schema_opts)
   @tfidf_schema NimbleOptions.new!(vectorizer_schema_opts ++ tfidf_schema_opts)
+  @bm25_schema NimbleOptions.new!(vectorizer_schema_opts ++ bm25_schema_opts)
 
   def get_vectorizer_schema() do
     @vectorizer_schema.schema
@@ -141,6 +155,10 @@ defmodule Mighty.Preprocessing.Shared do
 
   def get_tfidf_schema() do
     @tfidf_schema.schema
+  end
+
+  def get_bm25_schema() do
+    @bm25_schema.schema
   end
 
   def validate_vocabulary(vocabulary) do
@@ -186,6 +204,10 @@ defmodule Mighty.Preprocessing.Shared do
     NimbleOptions.validate!(opts, @tfidf_schema)
   end
 
+  def validate_bm25!(opts) do
+    NimbleOptions.validate!(opts, @bm25_schema)
+  end
+
   def validate_ngram_range(value = {min, max}) do
     if min <= max, do: {:ok, value}, else: {:error, "min must be less than or equal to max"}
   end
@@ -205,4 +227,9 @@ defmodule Mighty.Preprocessing.Shared do
   def validate_stop_words(stop_words) do
     {:error, "stop_words must be a list, got #{inspect(stop_words)}"}
   end
+
+  def validate_float_0_to_1(value) when is_float(value) and value >= 0 and value <= 1,
+    do: {:ok, value}
+
+  def validate_float_0_to_1(_), do: {:error, "must be a float between 0 and 1"}
 end
