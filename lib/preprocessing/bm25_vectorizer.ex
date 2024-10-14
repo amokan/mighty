@@ -15,6 +15,8 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     length_normalization_factor: 0.75
   ]
 
+  @epsilon 1.0e-10
+
   @doc """
   Creates a new `BM25Vectorizer` struct with the given options.
 
@@ -22,9 +24,9 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
 
   ## Options
 
-    * `:term_saturation_factor` (_often seen as 'k1'_) - Controls non-linear term frequency normalization (saturation).
+    * `:term_saturation_factor` (_often shown as 'k1'_) - Controls non-linear term frequency normalization (saturation).
       Higher values give more weight to term frequency. Default is `1.2`.
-    * `:length_normalization_factor` (_often seen as 'b'_) - Controls document length normalization.
+    * `:length_normalization_factor` (_often shown as 'b'_) - Controls document length normalization.
       Values closer to 1 give more value to document length. Default is `0.75`.
 
   _Also supports options found in `CountVectorizer`._
@@ -46,10 +48,7 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
 
   Returns the fitted vectorizer.
   """
-  def fit(
-        %__MODULE__{count_vectorizer: count_vectorizer} = vectorizer,
-        corpus
-      ) do
+  def fit(%__MODULE__{count_vectorizer: count_vectorizer} = vectorizer, corpus) do
     {cv, tf} = CountVectorizer.fit_transform(count_vectorizer, corpus)
     df = Scholar.Preprocessing.binarize(tf) |> Nx.sum(axes: [0])
 
@@ -62,8 +61,7 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     struct(vectorizer,
       count_vectorizer: cv,
       idf: idf,
-      avg_doc_length: avg_doc_length,
-      doc_lengths: doc_lengths
+      avg_doc_length: avg_doc_length
     )
   end
 
@@ -102,12 +100,11 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
     n_docs_tensor = Nx.tensor(n_docs, type: Nx.type(df))
 
     df
-    |> Nx.shape()
-    |> then(&Nx.broadcast(n_docs_tensor, &1))
-    |> Nx.subtract(df)
-    |> Nx.add(0.5)
-    |> Nx.divide(Nx.add(df, 0.5))
+    |> Nx.add(@epsilon)
+    |> Nx.divide(n_docs_tensor)
     |> Nx.log()
+    |> Nx.subtract(1)
+    |> Nx.multiply(-1)
   end
 
   defp calculate_bm25_score(
@@ -123,12 +120,10 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
       doc_lengths
       |> Nx.new_axis(1)
       |> Nx.divide(avg_doc_length)
+      |> Nx.add(@epsilon)
 
-    # numerator: (k1 + 1) * tf * idf
-    numerator =
-      tf
-      |> Nx.multiply(idf)
-      |> Nx.multiply(term_saturation_factor + 1)
+    # numerator: (k1 + 1) * tf
+    numerator = Nx.multiply(tf, term_saturation_factor + 1)
 
     # denominator: k1 * (1 - b + b * len_norm) + tf
     denominator =
@@ -138,10 +133,11 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
       |> Nx.add(1)
       |> Nx.multiply(term_saturation_factor)
       |> Nx.add(tf)
+      |> Nx.add(@epsilon)
 
     numerator
     |> Nx.divide(denominator)
-    |> Nx.sum(axes: [1])
-    |> Nx.max(1.0e-10)
+    |> Nx.multiply(idf)
+    |> Nx.max(@epsilon)
   end
 end
