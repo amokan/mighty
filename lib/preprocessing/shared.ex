@@ -134,12 +134,12 @@ defmodule Mighty.Preprocessing.Shared do
 
   bm25_schema_opts = [
     term_saturation_factor: [
-      type: :float,
+      type: {:in, ~i<[0,2]>},
       default: 1.2,
       doc: "Controls non-linear term frequency normalization (saturation) in BM25."
     ],
     length_normalization_factor: [
-      type: {:custom, __MODULE__, :validate_float_0_to_1, []},
+      type: {:in, ~i<[0,1]>},
       default: 0.75,
       doc: "Controls to what degree document length normalizes term frequency values in BM25."
     ]
@@ -227,9 +227,4 @@ defmodule Mighty.Preprocessing.Shared do
   def validate_stop_words(stop_words) do
     {:error, "stop_words must be a list, got #{inspect(stop_words)}"}
   end
-
-  def validate_float_0_to_1(value) when is_float(value) and value >= 0 and value <= 1,
-    do: {:ok, value}
-
-  def validate_float_0_to_1(_), do: {:error, "must be a float between 0 and 1"}
 end
