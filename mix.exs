@@ -36,7 +36,7 @@ defmodule Mighty.MixProject do
     [
       {:nimble_options, "~> 1.1"},
       {:nx, "~> 0.9"},
-      {:ex_doc, "~> 0.34.2", only: :docs},
+      {:ex_doc, "~> 0.35.1", only: :docs},
       {:scholar, "~> 0.3"},
       {:exterval, "~> 0.2"},
       {:flow, "~> 1.2"}
