@@ -16,6 +16,7 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
   ]
 
   @epsilon 1.0e-10
+  @score_threshold 1.0e-6
 
   @doc """
   Creates a new `BM25Vectorizer` struct with the given options.
@@ -135,9 +136,13 @@ defmodule Mighty.Preprocessing.BM25Vectorizer do
       |> Nx.add(tf)
       |> Nx.add(@epsilon)
 
-    numerator
-    |> Nx.divide(denominator)
-    |> Nx.multiply(idf)
-    |> Nx.max(@epsilon)
+    scores =
+      numerator
+      |> Nx.divide(denominator)
+      |> Nx.multiply(idf)
+
+    scores
+    |> Nx.greater(@score_threshold)
+    |> Nx.select(scores, Nx.tensor(0))
   end
 end
